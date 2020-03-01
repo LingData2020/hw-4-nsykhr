@@ -189,15 +189,15 @@ ggplot(mono1, aes(x=WordOrder, fill=AcceptabilityJ)) + geom_bar(position='dodge'
 Reproduce Figure 7 from the article using ggplot.
 
 ```{r}
-ggplot(mono1, aes(x=AcceptabilityJ, y=RT_log, fill=WordOrder)) + geom_violin() + geom_boxplot()
+ggplot(mono1, aes(x=AcceptabilityJ, y=RT_log, fill=WordOrder)) + geom_violin() + geom_boxplot(width=0.5)
 ```
 
 ### 1.11
 For the same data, draw a lineplot for group means and standard errors using `ggline()`:
 
 ```{r}
-
-
+library(ggpubr)
+ggline(mono1, x='AcceptabilityJ', y='RT_log', color='WordOrder', linetype='WordOrder', shape='WordOrder', add='mean_se')
 ```
 
 ## 2. Difference in reaction time
@@ -219,9 +219,11 @@ Use `group_by` and `summarise` to find mean logarithm of reaction time for each 
 ```
 
 ```{r}
+mean_rtlog_long <- mono1 %>%
+  group_by(ParticipantID, WordOrder) %>%
+  summarise(mean=mean(RT_log))
 
-
-
+mean_rtlog_long
 ```
 
 
@@ -237,41 +239,39 @@ Use `pivot_wider` to spread values of `RTlog` in `mean_rtlog_long` into two colu
  3 02810ff2a65eae2b3e54ac57d906309d      3.46        3.36
  ```
 ```{r}
-
-
+mean_rtlog <- mean_rtlog_long %>% pivot_wider(names_from = WordOrder, values_from = mean)
+mean_rtlog
 ```
 
 ### 2.3. Two-sample t-test
 Let us try to apply two-sample t-test to our data. Consider values in columns `Congruent` and `Incongruent` as two independent samples. Our null hypothesis is that these two samples are from populations with equal means. Alternative hypothesis: population mean for incongruate word order is larger (people need more time to ’parse’ it). Use `t.test` function to perform a test. Don't forget to specify `alternative`.
 
 ```{r}
-
-
+t.test(mean_rtlog$Congruent, mean_rtlog$Incongruent, alternative = 'less')
 ```
-Would you reject null hypothesis (under 5% significance level) according to this test?
+Would you reject null hypothesis (under 5% significance level) according to this test? Answer: no.
 
-What claim about logarithms of reaction time for Congruent and Incongruent stimuli can you make according to this test?
+What claim about logarithms of reaction time for Congruent and Incongruent stimuli can you make according to this test? Answer: the difference in their means is not statistically significant.
 
 ### 2.4. Paired t-test: manually
 To use paired t-test, let us find difference between logarithms of reaction time for each participant. Use `mutate` and add variable `diff` with aforementioned meaning to dataframe `mean_rtlog`. Save result as `mean_rtlog` again. Then compare mean of `diff` with 0 using 1-sample t-test. (Use appropriate alternative.)
 
 ```{r}
-
-
+mean_rtlog <- mutate(mean_rtlog, diff = Incongruent - Congruent)
+t.test(mean_rtlog$diff, alternative = 'greater')
 ```
 
-Whould you reject null hypothesis?
+Whould you reject null hypothesis? Answer: tes.
 
-What claim about logarithms of reaction time for Congruent and Incongruent stimuli can you make now?
+What claim about logarithms of reaction time for Congruent and Incongruent stimuli can you make now? Answer: actually, the mean logarithm of reaction time for Incongruent stimuli is larger than that for Congruent stimuli.
 
-How can you interpret difference with the result of 2.3?
+How can you interpret difference with the result of 2.3? Answer: using a standard two-sample t-test leads to averaging reaction times across subjects which smooths out the differences. Using a paired test allows us to use the information about changes in individual subjects' reaction times.
 
 #### 2.5. Paired t-test out of the box
 In fact, we can avoid manual calculation of difference and perform paired t-test using `t.test` function with parameter `paired = True`. Apply this function to your data and make sure you get the same result as in 2.4.
 
 ```{r}
-
-
+t.test(mean_rtlog$Congruent, mean_rtlog$Incongruent, alternative = 'less', paired = TRUE)
 ```
 
 ## 3. Difference between conditions
@@ -291,18 +291,22 @@ Filter only observation with `Incongruent` word order, then find average logarit
 ```
 
 ```{r}
+incong_rtlog <- mono1 %>%
+  filter(WordOrder == 'Incongruent') %>%
+  group_by(ParticipantID, TypeOfStimuli) %>%
+  summarise(mean=mean(RT_log))
 
-
-
+incong_rtlog
 ```
 
 ### 3.2 Statistical testing
 Use appropriate statistical test to answer the following question: are there any statistically significant difference in logarithm of reaction time for different conditions (types of stimuli)? Choose the test and provide justification for your choice. Provide your code, results and interpretation. What is your answer to the question?
 
 ```{r}
-
-
+res <- aov(mean ~ ParticipantID + TypeOfStimuli, data=incong_rtlog)
+summary(res)
 ```
+Answer: we are going to use a two-way ANOVA test since it allows us to test whether and how two independent categorical variables affect the value of the dependent variable (mean). The results are as follows: for both factors, we observe a high F-value and a very low p-value. Thus we are to reject the null hypothesis that the expected values are equal across different values of the independent variables.
 
 ### 3.3 Post-hoc analysis: which differences are significant?
 If we compare means for several (more than two) groups and reject null hypothesis that corresponding population means are equal to each other, the next natural question is to find all pairs of groups which difference is statistically significant. As we discussed at the lecture, pairwise t-tests cannot be used here without appropriate corrections. Instead, one can use Tukey Honest Significant Differences. It reports adjusted confidence intervals for differences between group means for each pair of groups as well as p-values for null hypothesis ’difference is equal to zero’.
@@ -310,8 +314,9 @@ If we compare means for several (more than two) groups and reject null hypothesi
 Apply `TukeyHSD` to the result of 3.2 and report which pair of conditions has statistically significant difference between logarithms of reaction time.
 
 ```{r}
-
+TukeyHSD(res, 'TypeOfStimuli')
 ```
+Answer: SubjectiveComment-Material and Shape-Color, SubjectiveComment-Material and Size-Nationality have statistically significant differences.
 
 ### R code cookbook
 
